@@ -2,19 +2,18 @@
 
 An [Amazon Quick](https://quick.aws.dev) skill for managing a personal LLM Wiki — a compounding knowledge base that gets smarter with every source you add.
 
-Based on [Andrej Karpathy's LLM Wiki concept](https://x.com/karpathy/status/1937537680890122369) and inspired by [sample-kiro-llm-wiki](https://github.com/aws-samples/sample-kiro-llm-wiki).
+Based on [Andrej Karpathy's LLM Wiki concept](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) and inspired by [sample-kiro-llm-wiki](https://github.com/aws-samples/sample-kiro-llm-wiki).
 
 > "Obsidian is the IDE; the LLM is the programmer; the wiki is the codebase."
 > — Andrej Karpathy
 
 ## What is an LLM Wiki?
 
-An LLM Wiki is a **structured knowledge base designed to be consumed by LLMs**. Unlike traditional documentation or notes, an LLM Wiki:
+Most people's experience with LLMs and documents looks like RAG: upload files, retrieve chunks at query time, generate an answer. This works, but the LLM rediscovers knowledge from scratch on every question. There's no accumulation.
 
-- **Compiles** raw sources into structured, interlinked pages at ingest time (not retrieval time)
-- **Compounds** — every source ingested and every query answered makes the wiki richer
-- **Stores what models can't know** — your decisions, pitfalls, project-specific insights
-- **Uses Obsidian** as the IDE — you get graph view, backlinks, and full-text search for free
+An LLM Wiki is different. Instead of retrieving from raw documents at query time, the LLM **incrementally compiles** your sources into a structured, interlinked wiki. Knowledge is processed once at ingest time and kept current — not re-derived on every query.
+
+The key difference: **the wiki is a persistent, compounding artifact.** Cross-references are already built. Contradictions are already flagged. The synthesis already reflects everything you've read.
 
 ## The 3-Layer Architecture
 
@@ -43,13 +42,30 @@ An LLM Wiki is a **structured knowledge base designed to be consumed by LLMs**. 
 ## How It Works
 
 ### 📥 Ingest — "Add this to the wiki"
-Drop a source (URL, article, project learnings) → Quick reads it, creates a source summary, updates relevant concept/entity pages, flags contradictions, and logs everything.
+Drop a source (URL, article, project learnings) → Quick reads it, creates a source summary, updates relevant concept/entity pages, flags contradictions, and logs everything. A single ingest may touch 10-15 wiki pages.
 
 ### 🔍 Query — "What does the wiki say about X?"
-Quick searches the wiki first (not general LLM knowledge), synthesizes an answer with citations, and offers to file valuable answers back as new wiki pages (the compounding loop).
+Quick searches the wiki first (not general LLM knowledge), synthesizes an answer with citations, and offers to file valuable answers back as new wiki pages. This is the compounding loop — queries become knowledge.
 
 ### 🩺 Lint — "Check wiki health"
-Quick scans for orphan pages, broken links, contradictions, stale claims, and coverage gaps. Outputs a prioritized action report.
+Quick scans for orphan pages, broken links, contradictions, stale claims, missing concepts, and coverage gaps. Outputs a prioritized action report.
+
+## Usage Modes
+
+### Mode 1: Wiki Management (default)
+Trigger the skill explicitly:
+- "Ingest this article: [URL]"
+- "What does the wiki say about [topic]?"
+- "Add a decision: we chose X because Y"
+- "Add a pitfall: [what went wrong]"
+- "Lint the wiki"
+
+### Mode 2: Wiki-First for All Questions (optional)
+If you want Quick to automatically check your wiki before answering any technical question, tell Quick once:
+
+> "When I ask technical questions, always check my LLM Wiki first before answering."
+
+Quick will remember this preference and automatically consult your wiki on future questions. This is optional — Mode 1 works perfectly without it.
 
 ## Installation
 
@@ -69,35 +85,28 @@ Quick scans for orphan pages, broken links, contradictions, stale claims, and co
    mkdir -p "Your Vault/LLM Wiki"/{raw/{articles,docs,projects},wiki/{sources,concepts,entities,decisions,pitfalls,golden,syntheses}}
    ```
 
-3. **Create SCHEMA.md** at the wiki root:
-   ```markdown
-   # LLM Wiki Schema
+3. **Create SCHEMA.md** at the wiki root (see `examples/SCHEMA.md` for a template).
 
-   ## Configuration
-   - vault_path: /path/to/your/vault/LLM Wiki
-   - owner: your-name
-
-   ## Conventions
-   - Language: English (or your preference)
-   - Domain: (your focus area)
-   ```
-
-4. **Add the vault folder** to Quick's allowed folders (Settings → Folders).
+4. **Add the vault folder** to Quick's allowed folders (Settings → Capabilities → Local Files).
 
 5. **Start using it:**
-   - "Ingest this article: [URL]"
-   - "What does the wiki say about [topic]?"
-   - "Run a wiki lint check"
-   - "Add a decision: we chose X because Y"
+   ```
+   "Ingest this article: https://example.com/interesting-post"
+   "What does the wiki say about database choices?"
+   "Lint the wiki"
+   "Add a decision: we chose Postgres over DynamoDB because..."
+   ```
 
 ## What to Put in Your Wiki
+
+The key insight from research: **don't add what the LLM already knows.** Only add what it can't know without being told.
 
 ### ✅ Add This
 | Type | Example |
 |------|---------|
-| Decisions | "Why we chose OpenSearch over Elasticsearch" |
-| Pitfalls | "DynamoDB hot partition caused 5xx at 2AM" |
-| Project learnings | "What worked/didn't in the Q3 migration" |
+| Decisions (ADRs) | "Why we chose OpenSearch over Elasticsearch" |
+| Pitfalls | "DynamoDB hot partition caused 5xx errors at 2AM" |
+| Project learnings | "What worked and didn't in the Q3 migration" |
 | Synthesized insights | "Comparison: Lambda vs Fargate for our use case" |
 | Experience-based knowledge | "In practice, cold starts matter less than..." |
 | Golden examples | "This CDK structure scaled cleanly to 20 services" |
@@ -105,24 +114,24 @@ Quick scans for orphan pages, broken links, contradictions, stale claims, and co
 ### ❌ Don't Add This
 | Type | Why Not |
 |------|---------|
-| API documentation | The LLM already knows this |
-| Tutorials/how-tos | Generic, not personal |
-| Copy-pasted docs | No value added |
+| API documentation | The LLM already knows this from training |
+| Tutorials / how-tos | Generic, not personal |
+| Copy-pasted official docs | Zero value added |
 
-**The test**: *"Could the LLM make the right decision without this?"*
-- YES → don't add it
-- NO → add it
+**The test:** "Could the LLM make the right decision without this information?"
+- **YES** → don't add it
+- **NO** → add it
 
 ## Key Principles
 
-1. **Wiki > RAG** — Compile at ingest time, not retrieval time
+1. **Compiled Knowledge > RAG** — Process at ingest time, not query time
 2. **Compounding** — Every ingest and query makes the wiki richer
-3. **Always Cite** — Every claim traces back to `raw/`
-4. **Flag Contradictions** — Never silently overwrite; show the evolution of beliefs
+3. **Always Cite** — Every claim traces back to `raw/` via frontmatter or [[links]]
+4. **Flag Contradictions** — Never silently overwrite; preserve the evolution of beliefs
 5. **Interlink** — 3-10 `[[wiki-links]]` per page; orphans = problems
 6. **Wiki-First** — Answer from the wiki before reaching for general knowledge
 
-## File Structure
+## Repository Structure
 
 ```
 llm-wiki-for-quick/
@@ -134,19 +143,33 @@ llm-wiki-for-quick/
 
 ## Comparison with Other Approaches
 
-| | LLM Wiki (Quick) | RAG | Traditional Notes |
+| | LLM Wiki | RAG | Traditional Notes |
 |---|---|---|---|
 | When knowledge is processed | At ingest time | At query time | Never (by LLM) |
 | Knowledge compounds | ✅ Yes | ❌ No | ❌ No |
-| Contradictions handled | ✅ Flagged explicitly | ❌ Latest wins | ❌ Forgotten |
-| Cross-references | ✅ Obsidian `[[links]]` | ❌ None | Maybe |
-| Works offline | ✅ Local files | Depends | ✅ Yes |
-| Requires embedding/vector DB | ❌ No | ✅ Yes | ❌ No |
+| Contradictions handled | ✅ Flagged explicitly | ❌ Latest chunk wins | ❌ Forgotten |
+| Cross-references | ✅ Obsidian `[[links]]` | ❌ None | Maybe manual |
+| Works offline | ✅ Local markdown files | Depends on infra | ✅ Yes |
+| Requires vector DB | ❌ No | ✅ Yes | ❌ No |
+| Maintenance cost | Low (LLM does it) | Medium (embeddings) | High (manual) |
+
+## How This Compares to Kiro's Implementation
+
+[sample-kiro-llm-wiki](https://github.com/aws-samples/sample-kiro-llm-wiki) implements the same Karpathy pattern for Kiro CLI. Both do the same thing — the difference is which tool runs the operations:
+
+| | This repo (Quick) | sample-kiro-llm-wiki (Kiro) |
+|---|---|---|
+| Runner | Amazon Quick | Kiro CLI |
+| Invocation | Natural language in Quick chat | `kiro chat --agent llm-wiki` |
+| Storage | Same Obsidian vault | Same Obsidian vault |
+| Operations | Ingest / Query / Lint | Ingest / Query / Lint |
+
+You can use both on the same vault — they're complementary, not competing.
 
 ## See Also
 
-- [Karpathy's original LLM Wiki tweet](https://x.com/karpathy/status/1937537680890122369)
-- [sample-kiro-llm-wiki](https://github.com/aws-samples/sample-kiro-llm-wiki) — Kiro-native implementation
+- [Karpathy's LLM Wiki gist](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) — The original idea
+- [sample-kiro-llm-wiki](https://github.com/aws-samples/sample-kiro-llm-wiki) — Kiro CLI implementation
 - [Obsidian](https://obsidian.md) — Recommended wiki IDE
 
 ## License
